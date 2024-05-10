@@ -8,8 +8,8 @@ import { Video } from "../models/video.model.js"
 
 const createPlaylist = asyncHandler(async (req, res) => {
     const { name, description } = req.body;
-    if (!(name.trim() !== "") || !(description.trim() !== "")) {
-        throw new ApiError(400, "Name or description is not unavailable")
+    if (!name || !description) {
+        throw new ApiError(400, "Name or description is not available")
     }
 
     const user = await User.findById(req.user?._id)
@@ -88,10 +88,77 @@ const addVideoToPlaylist = asyncHandler(async (req, res) => {
 
 })
 
+const removeVideoFromPlaylist = asyncHandler(async (req, res) => {
+    const { playlistId, videoId } = req.params;
+
+    if (!isValidObjectId(playlistId) || !isValidObjectId(videoId)) {
+        throw new ApiError(400, "invalid playlist id or video id")
+    }
+
+    const playlist = await Playlist.findById(playlistId)
+
+    if (!playlist)
+        throw new ApiError(404, "Playlist not found")
+
+    const video = await Video.findById(videoId)
+    if (!video || !isPublished(video))
+        throw new ApiError(404, "video not found")
+
+    playlist.videos.pull(videoId)
+
+    const updatedPlaylist = await Playlist.save()
+
+    if (!updatedPlaylist)
+        throw new ApiError(400, "Playlist could not be updated")
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, updatedPlaylist, "Video removed successfully"))
+
+})
+
+const deletePlaylist = asyncHandler(async (req, res) => {
+    const { playlistId } = req.params
+    if (!isValidObjectId(playlistId))
+        throw new ApiError(400, "Playlistid is not valid")
+    const playlistDeleted = await Playlist.findByIdAndDelete(playlistId);
+    if (!playlistDeleted)
+        throw new ApiError(404, "Playlist not deleted")
+
+    return res.status(200)
+        .json(new ApiResponse(200, playlistDeleted, "Successfully deleted playlist"))
+})
+
+const updatePlaylist = asyncHandler(async (req, res) => {
+    const { playlistId } = req.params
+    const { name, description } = req.body
+    if (!isValidObjectId(playlistId))
+        throw new ApiError(400, "invalid playlist id")
+    if (!name || !description)
+        throw new ApiError(400, "name or description is required")
+    const playlistUpdated = await Playlist.findByIdAndUpdate(playlistId,
+        {
+            $set: {
+                name,
+                description
+            }
+        },
+        {
+            new :true
+        }
+    )
+    if(!playlistUpdated)
+        throw new ApiError(400,"Playlist not updated")
+    return res.status(200)
+    .json(new ApiResponse(200,playlistUpdated,"Playlist updated successfully"))
+})
 
 export {
     createPlaylist,
     getUserPlaylists,
     getPlaylistById,
-    addVideoToPlaylist
+    addVideoToPlaylist,
+    removeVideoFromPlaylist,
+    deletePlaylist,
+    updatePlaylist
 }
