@@ -27,25 +27,74 @@ const createPlaylist = asyncHandler(async (req, res) => {
 })
 
 const getUserPlaylists = asyncHandler(async (req, res) => {
-    const { userId } = req.params
+
+    const { userId } = req.params;
+
+    // check if Invalid userId
     if (!isValidObjectId(userId)) {
-        throw new ApiError(401, "User Id is invalid")
+        throw new ApiError(400, "Invalid userId!");
     }
-    const pipeline = [
+
+    // check if user not exist
+    const user = await User.findById(userId);
+    if (!user) {
+        throw new ApiError(404, "User not found!");
+    }
+
+    const playlists = await Playlist.aggregate([
         {
             $match: {
-                owner: userId
+                owner: new mongoose.Types.ObjectId(userId),
+            },
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "videos",
+                foreignField: "_id",
+                as: "videos",
+                pipeline: [
+                    {
+                        $sort: { createdAt: -1 }
+                    },
+                    {
+                        $limit: 1,
+                    },
+                    {
+                        $project: {
+                            thumbnail: 1,
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            $addFields: {
+                playlistThumbnail: {
+                    $cond: {
+                        if: { $isArray: "$videos" },
+                        then: { $first: "$videos.thumbnail" },
+                        else: null,
+                    },
+                },
+            },
+        },
+        {
+            $project: {
+                name: 1,
+                description: 1,
+                playlistThumbnail: 1
             }
         }
-    ]
-    const userPlaylist = await Playlist.aggregate(pipeline)
-    if (!userPlaylist)
-        throw new ApiError(404, "Playlist not found")
+    ]);
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, userPlaylist, "Playlist found successfully"))
-})
+    return res.status(200).json(new ApiResponse(
+        200,
+        { playlists },
+        "Playlists fetched successfully"
+    ));
+});
+
 
 const getPlaylistById = asyncHandler(async (req, res) => {
     const { playlistId } = req.params
@@ -141,13 +190,13 @@ const updatePlaylist = asyncHandler(async (req, res) => {
             }
         },
         {
-            new :true
+            new: true
         }
     )
-    if(!playlistUpdated)
-        throw new ApiError(400,"Playlist not updated")
+    if (!playlistUpdated)
+        throw new ApiError(400, "Playlist not updated")
     return res.status(200)
-    .json(new ApiResponse(200,playlistUpdated,"Playlist updated successfully"))
+        .json(new ApiResponse(200, playlistUpdated, "Playlist updated successfully"))
 })
 
 export {
