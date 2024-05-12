@@ -12,9 +12,6 @@ const createPlaylist = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Name or description is not available")
     }
 
-    const user = await User.findById(req.user?._id)
-    if (!user) throw new ApiError(404, "user not found")
-
     const playlist = await Playlist.create({
         name,
         description,
